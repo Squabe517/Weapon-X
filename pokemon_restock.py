@@ -18,11 +18,12 @@ import random
 import time
 
 from dotenv import load_dotenv
-from selenium import webdriver
 from selenium.common.exceptions import TimeoutException, WebDriverException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
+
+from browser import create_driver, ensure_logged_in, get_page, is_logged_in
 
 logging.basicConfig(
     level=logging.INFO,
@@ -45,8 +46,7 @@ TARGET_ITEMS = [
 
 CHECK_INTERVAL = int(os.environ.get("CHECK_INTERVAL", 60))
 MAX_RETRIES = int(os.environ.get("MAX_RETRIES", 3))
-EMAIL = os.environ.get("TARGET_EMAIL", "YOUR_EMAIL")
-PASSWORD = os.environ.get("TARGET_PASSWORD", "YOUR_PASSWORD")
+SESSION_RECHECK_SECONDS = 30 * 60
 
 ADD_TO_CART = (By.XPATH, "//button[contains(normalize-space(.), 'Add to cart')]")
 OUT_OF_STOCK = (
@@ -58,25 +58,8 @@ OUT_OF_STOCK = (
 
 class TargetPokemonRestockMonitor:
     def __init__(self):
-        self.driver = self._create_driver()
+        self.driver = create_driver()
         self.wait = WebDriverWait(self.driver, 10)
-
-    @staticmethod
-    def _create_driver():
-        """Create a Chrome driver; Selenium Manager resolves the driver binary."""
-        logger.info("Setting up the Chrome webdriver...")
-        options = webdriver.ChromeOptions()
-        options.page_load_strategy = "eager"
-        options.add_argument("--disable-blink-features=AutomationControlled")
-        options.add_argument("--window-size=1366,768")
-
-        driver = webdriver.Chrome(options=options)
-        # Applies to every new document, unlike a one-off execute_script call
-        driver.execute_cdp_cmd(
-            "Page.addScriptToEvaluateOnNewDocument",
-            {"source": "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"},
-        )
-        return driver
 
     def __enter__(self):
         return self
@@ -88,7 +71,7 @@ class TargetPokemonRestockMonitor:
         """Return True if the item appears to be in stock."""
         try:
             logger.info(f"Checking stock for {item['name']}...")
-            self.driver.get(item["url"])
+            get_page(self.driver, item["url"])
             self.wait.until(EC.presence_of_element_located((By.TAG_NAME, "body")))
             time.sleep(random.uniform(1, 3))
 
@@ -107,40 +90,15 @@ class TargetPokemonRestockMonitor:
             return False
 
     def login(self):
-        """Log into the Target account. Return True on success."""
-        try:
-            logger.info("Attempting to login to Target account...")
-            self.driver.get("https://www.target.com/account")
-
-            email_field = self.wait.until(EC.element_to_be_clickable((By.ID, "username")))
-            email_field.clear()
-            email_field.send_keys(EMAIL)
-
-            password_field = self.driver.find_element(By.ID, "password")
-            password_field.clear()
-            password_field.send_keys(PASSWORD)
-
-            time.sleep(random.uniform(0.5, 1.5))
-            self.driver.find_element(By.ID, "login").click()
-
-            WebDriverWait(self.driver, 15).until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, "a[data-test*='account']"))
-            )
-            logger.info("Successfully logged in to Target account.")
-            return True
-        except TimeoutException:
-            logger.error("Failed to login - timeout waiting for account element.")
-            return False
-        except WebDriverException as e:
-            logger.error(f"Error during login: {e}")
-            return False
+        """Ensure the persistent Chrome profile has a logged-in Target session."""
+        return ensure_logged_in(self.driver)
 
     def add_to_cart(self, item):
         """Add the item to the cart. Return True on success."""
         try:
             logger.info(f"Attempting to add {item['name']} to cart...")
             if item["url"] not in self.driver.current_url:
-                self.driver.get(item["url"])
+                get_page(self.driver, item["url"])
 
             self.wait.until(EC.element_to_be_clickable(ADD_TO_CART)).click()
 
@@ -165,7 +123,7 @@ class TargetPokemonRestockMonitor:
         """Proceed through checkout up to the final confirmation."""
         try:
             logger.info("Proceeding to checkout...")
-            self.driver.get("https://www.target.com/co-cart")
+            get_page(self.driver, "https://www.target.com/co-cart")
 
             self.wait.until(
                 EC.element_to_be_clickable(
@@ -200,7 +158,16 @@ class TargetPokemonRestockMonitor:
             logger.error("Login failed; aborting.")
             return False
 
+        last_session_check = time.monotonic()
+
         while True:
+            if time.monotonic() - last_session_check > SESSION_RECHECK_SECONDS:
+                if not is_logged_in(self.driver):
+                    logger.error("Session expired. Run test_login.py (or re-login in the window) and restart.")
+                    if not ensure_logged_in(self.driver):
+                        return False
+                last_session_check = time.monotonic()
+
             for item in TARGET_ITEMS:
                 if not self.check_stock(item):
                     continue

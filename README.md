@@ -31,12 +31,13 @@ This project automatically monitors Target's website for Pokémon trading cards 
    pip install -r requirements.txt
    ```
 
-3. Create a `.env` file with your Target credentials:
+3. Log in once. Target now requires a security key or an emailed code, so login is manual. Run:
    ```
-   cp .env.template .env
+   python test_login.py
    ```
-   
-4. Edit the `.env` file with your actual Target login credentials.
+   Log in in the Chrome window that opens. The session is saved in a dedicated Chrome profile (`chrome-profile/`, or `CHROME_PROFILE_DIR`) and reused by the scripts. When it eventually expires, run `test_login.py` again. Do not run two Chrome instances on the same profile.
+
+4. (Optional) Copy `.env.template` to `.env` to override settings such as `CHECK_INTERVAL`.
 
 ## Configuration
 
@@ -57,7 +58,7 @@ python pokemon_restock.py
 ```
 
 The script will:
-1. Log in to your Target account
+1. Reuse your saved Target session (prompting for a manual login if needed)
 2. Begin monitoring the item's stock status
 3. When the item comes in stock, it will automatically add it to your cart and proceed to checkout
 4. By default, the final "Place order" button click is commented out for safety. The script will pause at the final checkout step for you to review and manually complete the purchase.
@@ -85,7 +86,7 @@ You can customize the script by:
 If the script fails to run:
 
 1. Ensure Chrome is installed and up-to-date
-2. Check that your Target credentials are correct in the `.env` file
+2. Run `python test_login.py` to confirm the saved session is logged in
 3. Review the log file for specific error messages
 4. Target may have changed its website structure, requiring updates to the XPath selectors
 
