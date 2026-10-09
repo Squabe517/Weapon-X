@@ -14,9 +14,9 @@ This project automatically monitors Target's website for Pokémon trading cards 
 
 ## Prerequisites
 
-- Python 3.8 or higher
+- Python 3.10 or higher
 - Chrome web browser
-- ChromeDriver (automatically installed by webdriver-manager)
+- ChromeDriver (resolved automatically by Selenium Manager, built into Selenium)
 
 ## Installation
 
@@ -33,7 +33,7 @@ This project automatically monitors Target's website for Pokémon trading cards 
 
 3. Create a `.env` file with your Target credentials:
    ```
-   cp .env-template .env
+   cp .env.template .env
    ```
    
 4. Edit the `.env` file with your actual Target login credentials.
@@ -42,11 +42,11 @@ This project automatically monitors Target's website for Pokémon trading cards 
 
 The main configuration variables are at the top of `pokemon_restock.py`:
 
-- `TARGET_URL`: The URL of the specific item you want to monitor
+- `TARGET_ITEMS`: List of items (url and name) to monitor
 - `CHECK_INTERVAL`: How often to check stock (in seconds)
 - `MAX_RETRIES`: Maximum number of purchase attempts if errors occur
 
-If you want to monitor multiple items, you can modify the script to use a list of URLs.
+Add more entries to `TARGET_ITEMS` to monitor multiple items.
 
 ## Usage
 
@@ -248,3 +248,4 @@ While Discord is the recommended notification method, the system also supports:
    ```
    USE_SMS_NOTIFICATIONS=True
    TWILIO_ACCOUNT_SID=your-twilio-account-sid
+
